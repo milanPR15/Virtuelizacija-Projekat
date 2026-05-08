@@ -10,9 +10,13 @@ namespace Common
         void StartSession(string meta);
 
         [OperationContract]
+
+        [FaultContract(typeof(ValidationFault))]
+        [FaultContract(typeof(DataFormatFault))]
         void PushSample(SmartGridSample sample);
 
         [OperationContract]
         void EndSession();
+
     }
 }
