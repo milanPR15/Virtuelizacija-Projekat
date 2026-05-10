@@ -4,8 +4,9 @@ using System.ServiceModel;
 
 namespace Service
 {
-    public class SmartGridService : ISmartGridService
+    public class SmartGridService : ISmartGridService, IDisposable
     {
+        private bool disposed = false;
         public void StartSession(string meta)
         {
             Console.WriteLine($"Session started with meta: {meta}");
@@ -36,7 +37,7 @@ namespace Service
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Voltage value ({sample.Voltage}) is negative.",
-                    ViolatingFiled = "Voltage"
+                    ViolatingField = "Voltage"
                 });
             }
 
@@ -45,7 +46,7 @@ namespace Service
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Current value ({sample.Current}) is negative.",
-                    ViolatingFiled = "Current"
+                    ViolatingField = "Current"
                 });
             }
 
@@ -56,5 +57,31 @@ namespace Service
         {
             Console.WriteLine("Session ended.");
         }
+
+        public void Dispose()
+        {
+            Dispose(true);
+            GC.SuppressFinalize(this);
+        }
+
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if(!disposed)
+            {
+                if(disposing)
+                {
+                    Console.WriteLine("Server resources are being released.");
+                }
+                disposed = true;
+            }
+        }
+
+        ~SmartGridService()
+        {
+            Dispose(false);
+        }
+
+
     }
 }

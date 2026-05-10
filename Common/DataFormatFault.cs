@@ -14,6 +14,6 @@ namespace Common
         public string Details { get; set; }
 
         [DataMember]
-        public string ViolatingFiled { get; set; }
+        public string ViolatingField { get; set; }
     }
 }
