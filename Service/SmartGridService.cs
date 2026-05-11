@@ -1,11 +1,37 @@
 using System;
 using Common;
 using System.ServiceModel;
+using System.IO;
+using System.Net.NetworkInformation;
 
 namespace Service
 {
     public class SmartGridService : ISmartGridService, IDisposable
     {
+        private static bool isFirstTime = true;
+
+        private StreamWriter measuremenWriter;
+        private StreamWriter rejectWriter;
+
+
+        private readonly string measurementFile = "measurements_session.csv";
+        private readonly string rejectFile = "rejects.csv";
+
+        public SmartGridService()
+        {
+            bool append = !isFirstTime;
+            measuremenWriter = new StreamWriter(measurementFile, append);
+            rejectWriter = new StreamWriter(rejectFile, append);
+
+            measuremenWriter.AutoFlush = true;
+            rejectWriter.AutoFlush = true;
+
+            if(isFirstTime)
+            {
+                isFirstTime = false;
+            }
+        }
+
         private bool disposed = false;
         public void StartSession(string meta)
         {
@@ -25,6 +51,9 @@ namespace Service
 
             if(sample.Frequency <= 0)
             {
+                string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
+                rejectWriter.WriteLine(rejectLine);
+
                 throw new FaultException<ValidationFault>(new ValidationFault
                 {
                     Message = $"Invalid frequency ({sample.Frequency}). Must be greater than 0.",
@@ -34,6 +63,9 @@ namespace Service
 
             if(sample.Voltage < 0)
             {
+                string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
+                rejectWriter.WriteLine(rejectLine);
+
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Voltage value ({sample.Voltage}) is negative.",
@@ -43,12 +75,19 @@ namespace Service
 
             if (sample.Current < 0)
             {
+                string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
+                rejectWriter.WriteLine(rejectLine);
+
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Current value ({sample.Current}) is negative.",
                     ViolatingField = "Current"
                 });
             }
+            
+
+            string validLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency}";
+            measuremenWriter.WriteLine(validLine);
 
             Console.WriteLine($"Sample received: Voltage={sample.Voltage}, Current={sample.Current}");
         }
@@ -71,7 +110,18 @@ namespace Service
             {
                 if(disposing)
                 {
-                    Console.WriteLine("Server resources are being released.");
+                   if(measuremenWriter != null)
+                   {
+                        measuremenWriter.Close();
+                        measuremenWriter.Dispose();
+                   }
+
+                   if(rejectWriter != null)
+                   {
+                        rejectWriter.Close();
+                        rejectWriter.Dispose();
+                   }
+                    Console.WriteLine("Server resources are being relesed. ");
                 }
                 disposed = true;
             }
