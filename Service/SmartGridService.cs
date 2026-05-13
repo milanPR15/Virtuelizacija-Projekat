@@ -40,6 +40,7 @@ namespace Service
 
         public void PushSample(SmartGridSample sample)
         {
+            Console.WriteLine("Processing incoming sample...");
             if (sample == null)
             {
                 throw new FaultException<ValidationFault>(new ValidationFault
@@ -89,7 +90,9 @@ namespace Service
             string validLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency}";
             measuremenWriter.WriteLine(validLine);
 
+            System.Threading.Thread.Sleep(1000);
             Console.WriteLine($"Sample received: Voltage={sample.Voltage}, Current={sample.Current}");
+            Console.WriteLine("Sample accepted and stored.");
         }
 
         public void EndSession()

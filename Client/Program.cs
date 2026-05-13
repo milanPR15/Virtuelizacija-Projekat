@@ -44,7 +44,10 @@ namespace Client
                                 Frequency = double.Parse(parts[4], CultureInfo.InvariantCulture)
                             };
 
+
                             proxy.PushSample(sample);
+                            System.Threading.Thread.Sleep(1000);
+
                             count++;
 
                             if(count % 100 == 0)
