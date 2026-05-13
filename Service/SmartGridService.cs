@@ -3,6 +3,7 @@ using Common;
 using System.ServiceModel;
 using System.IO;
 using System.Net.NetworkInformation;
+using Service.Publisher;
 
 namespace Service
 {
@@ -17,6 +18,9 @@ namespace Service
         private readonly string measurementFile = "measurements_session.csv";
         private readonly string rejectFile = "rejects.csv";
 
+        TransferGenerator transferGenerator = new TransferGenerator();
+        RecieveGenerator recieverGenerator = new RecieveGenerator();
+
         public SmartGridService()
         {
             bool append = !isFirstTime;
@@ -30,6 +34,11 @@ namespace Service
             {
                 isFirstTime = false;
             }
+
+            transferGenerator.OnTransferStarted += OnTransferStarted;
+            transferGenerator.OnTransferCompleted += OnTransferCompleted;
+
+            recieverGenerator.OnSampleReceived += OnRecieve;
         }
 
         private bool disposed = false;
@@ -40,7 +49,6 @@ namespace Service
 
         public void PushSample(SmartGridSample sample)
         {
-            Console.WriteLine("Processing incoming sample...");
             if (sample == null)
             {
                 throw new FaultException<ValidationFault>(new ValidationFault
@@ -87,12 +95,9 @@ namespace Service
             }
             
 
-            string validLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency}";
-            measuremenWriter.WriteLine(validLine);
 
-            System.Threading.Thread.Sleep(1000);
+            SimulateDataTransfer();
             Console.WriteLine($"Sample received: Voltage={sample.Voltage}, Current={sample.Current}");
-            Console.WriteLine("Sample accepted and stored.");
         }
 
         public void EndSession()
@@ -135,6 +140,25 @@ namespace Service
             Dispose(false);
         }
 
+        private void SimulateDataTransfer()
+        {
+            transferGenerator.GenerateTransfer();
+        }
 
+        private void OnTransferStarted(object sender, EventArgs e)
+        {
+            Console.WriteLine("Processing incoming sample...");
+        }
+
+        private void OnTransferCompleted(object sender, EventArgs e)
+        {
+            Console.WriteLine("Sample accepted and stored.");
+        }
+
+        private void OnRecieve(object sender, RecieveEventArgs e)
+        {
+            string validLine = $"{DateTime.Now} | Voltage: {e.Voltage}, Current: {e.Current}, Frequency: {e.Frequency}";
+            measuremenWriter.WriteLine(validLine);
+        }
     }
 }
