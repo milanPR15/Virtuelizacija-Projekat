@@ -10,14 +10,29 @@ namespace Service.Publisher
     {
         public delegate void WarningEventHandler(object sender, WarningEventArgs e);
 
-        public event WarningEventHandler OnWarning;
+        public event WarningEventHandler VoltageSpike;
+        public event WarningEventHandler CurrentSpike;
 
-        public void GenerateWarning(string trigger, string direction)
+
+        public void GenerateVoltageSpike(string direction)
         {
-            if (OnWarning != null)
+            if (VoltageSpike != null)
             {
-                WarningEventArgs args = new WarningEventArgs(trigger, direction);
-                OnWarning(this, args);
+                WarningEventArgs args = new WarningEventArgs(direction);
+                VoltageSpike(this, args);
+            }
+            else
+            {
+                Console.WriteLine("No subscribers!");
+            }
+        }
+
+        public void GenerateCurrentSpike(string direction)
+        {
+            if (CurrentSpike != null)
+            {
+                WarningEventArgs args = new WarningEventArgs(direction);
+                CurrentSpike(this, args);
             }
             else
             {

@@ -4,12 +4,19 @@ using System.ServiceModel;
 using System.IO;
 using System.Net.NetworkInformation;
 using Service.Publisher;
+using System.Configuration;
 
 namespace Service
 {
     public class SmartGridService : ISmartGridService, IDisposable
     {
         private static bool isFirstTime = true;
+
+        private static double lastVoltage = 0;
+        private static double lastCurrent = 0;
+
+        private double ITrashold = double.Parse(ConfigurationManager.AppSettings["I_threshold"]);
+        private double VTrashold = double.Parse(ConfigurationManager.AppSettings["V_threshold"]);
 
         private StreamWriter measuremenWriter;
         private StreamWriter rejectWriter;
@@ -20,6 +27,7 @@ namespace Service
 
         TransferGenerator transferGenerator = new TransferGenerator();
         RecieveGenerator recieverGenerator = new RecieveGenerator();
+        WarningGenerator warningGenerator = new WarningGenerator();
 
         public SmartGridService()
         {
@@ -30,7 +38,7 @@ namespace Service
             measuremenWriter.AutoFlush = true;
             rejectWriter.AutoFlush = true;
 
-            if(isFirstTime)
+            if (isFirstTime)
             {
                 isFirstTime = false;
             }
@@ -39,6 +47,8 @@ namespace Service
             transferGenerator.OnTransferCompleted += OnTransferCompleted;
 
             recieverGenerator.OnSampleReceived += OnRecieve;
+            warningGenerator.VoltageSpike += OnVoltageSpike;
+            warningGenerator.CurrentSpike += OnCurrentSpike;
         }
 
         private bool disposed = false;
@@ -58,7 +68,7 @@ namespace Service
                 });
             }
 
-            if(sample.Frequency <= 0)
+            if (sample.Frequency <= 0)
             {
                 string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
                 rejectWriter.WriteLine(rejectLine);
@@ -70,7 +80,7 @@ namespace Service
                 });
             }
 
-            if(sample.Voltage < 0)
+            if (sample.Voltage < 0)
             {
                 string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
                 rejectWriter.WriteLine(rejectLine);
@@ -93,11 +103,16 @@ namespace Service
                     ViolatingField = "Current"
                 });
             }
-            
+
 
 
             SimulateDataTransfer();
             Console.WriteLine($"Sample received: Voltage={sample.Voltage}, Current={sample.Current}");
+
+            CheckCurrentSpike(lastCurrent, sample);
+            CheckVoltageSpike(lastVoltage, sample);
+            lastCurrent = sample.Current;
+            lastVoltage = sample.Voltage;
         }
 
         public void EndSession()
@@ -114,21 +129,21 @@ namespace Service
 
         protected virtual void Dispose(bool disposing)
         {
-            if(!disposed)
+            if (!disposed)
             {
-                if(disposing)
+                if (disposing)
                 {
-                   if(measuremenWriter != null)
-                   {
+                    if (measuremenWriter != null)
+                    {
                         measuremenWriter.Close();
                         measuremenWriter.Dispose();
-                   }
+                    }
 
-                   if(rejectWriter != null)
-                   {
+                    if (rejectWriter != null)
+                    {
                         rejectWriter.Close();
                         rejectWriter.Dispose();
-                   }
+                    }
                     Console.WriteLine("Server resources are being relesed. ");
                 }
                 disposed = true;
@@ -159,6 +174,47 @@ namespace Service
         {
             string validLine = $"{DateTime.Now} | Voltage: {e.Voltage}, Current: {e.Current}, Frequency: {e.Frequency}";
             measuremenWriter.WriteLine(validLine);
+        }
+
+        private void OnVoltageSpike(object sender, WarningEventArgs e)
+        {
+            Console.WriteLine($"Voltage Spike: Direction: {e.Direction}");
+        }
+
+        private void OnCurrentSpike(object sender, WarningEventArgs e)
+        {
+            Console.WriteLine($"Current Spike: Direction: {e.Direction}");
+        }
+
+        private void CheckCurrentSpike(double lastCurrent, SmartGridSample sample)
+        {
+            if (lastCurrent != 0)
+            {
+                if (sample.Current - lastCurrent > ITrashold)
+                {
+                    warningGenerator.GenerateCurrentSpike("Upward");
+                }
+                else if (lastCurrent - sample.Current > ITrashold)
+                {
+                    warningGenerator.GenerateCurrentSpike("Downward");
+                }
+
+            }
+        }
+
+        private void CheckVoltageSpike(double lastVoltage, SmartGridSample sample)
+        {
+            if (lastVoltage != 0)
+            {
+                if (sample.Voltage - lastVoltage > VTrashold)
+                {
+                    warningGenerator.GenerateVoltageSpike("Upward");
+                }
+                else if (lastVoltage - sample.Voltage > VTrashold)
+                {
+                    warningGenerator.GenerateVoltageSpike("Downward");
+                }
+            }
         }
     }
 }

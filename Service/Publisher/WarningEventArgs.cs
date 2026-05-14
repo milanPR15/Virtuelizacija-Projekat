@@ -8,11 +8,9 @@ namespace Service.Publisher
 {
     internal class WarningEventArgs
     {
-        public string Trigger { get; set; }
         public string Direction { get; set; }
-        public WarningEventArgs(string trigger, string direction)
+        public WarningEventArgs(string direction)
         {
-            Trigger = trigger;
             Direction = direction;
         }
     }
