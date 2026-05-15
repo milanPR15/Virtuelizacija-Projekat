@@ -12,6 +12,8 @@ namespace Client
     {
         static void Main(string[] args)
         {
+            string clientLogPath = "client_errors.log";
+            File.WriteAllText(clientLogPath, $"-----Log started: {DateTime.Now}---{Environment.NewLine}");
             
             ChannelFactory<ISmartGridService> factory = new ChannelFactory<ISmartGridService>("SmartGridEndpoint");
 
@@ -26,49 +28,57 @@ namespace Client
 
                 if(File.Exists(filePath))
                 {
-                    Console.WriteLine("Reading dataset..");
-                    var lines = File.ReadAllLines(filePath);
+                    Console.WriteLine("Reading dataset in batches of 100..");
+                    var allLines = File.ReadLines(filePath).Skip(1).ToList();
+                    int totalRows = allLines.Count;
+                    int batchSize = 100;
+                    int processedCount = 0; 
 
-                    int count = 0;
-                    foreach(var line in lines.Skip(1))
+
+                    for(int i = 0; i < totalRows; i += batchSize)
                     {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
-                        string[] parts = line.Split(',');
+                        var batch = allLines.Skip(i).Take(batchSize);
+                        Console.WriteLine($"--------- Processing batch: {i} to {i + batchSize} ---------");
 
-                        try
+
+                        foreach(var line in batch)
                         {
-                            SmartGridSample sample = new SmartGridSample
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+
+                            string[] parts = line.Split(',');
+
+
+                            try
                             {
-                                Voltage = double.Parse(parts[1], CultureInfo.InvariantCulture),
-                                Current = double.Parse(parts[2], CultureInfo.InvariantCulture),
-                                Frequency = double.Parse(parts[4], CultureInfo.InvariantCulture)
-                            };
+                                if(parts.Length<6)
+                                {
+                                    throw new Exception("Row does not contain enough columns");   ///doradi
+                                }
 
+                                SmartGridSample sample = new SmartGridSample
+                                {
+                                    Timestamp = DateTime.Parse(parts[0], CultureInfo.InvariantCulture),
+                                    Voltage = double.Parse(parts[1], CultureInfo.InvariantCulture),
+                                    Current = double.Parse(parts[2], CultureInfo.InvariantCulture),
+                                    PowerUsage = double.Parse(parts[3], CultureInfo.InvariantCulture),
+                                    Frequency = double.Parse(parts[4], CultureInfo.InvariantCulture),
+                                    FaultIndicator = parts[5] == "1"
 
-                            proxy.PushSample(sample);
-                            System.Threading.Thread.Sleep(1000);
+                                };
 
-                            count++;
+                                proxy.PushSample(sample);
+                                processedCount++;
+                                
 
-                            if(count % 100 == 0)
+                            }
+                            catch(Exception ex)
                             {
-                                Console.WriteLine($"Successfully sent {count} samples.");
+                                string errorMsg = $"[Error - Row {processedCount + i}]: {ex.Message} | Content: {line}";
+                                File.AppendAllText(clientLogPath, errorMsg + Environment.NewLine);
+                                Console.WriteLine($" Skipped invalid row. Error logged in: {clientLogPath}");
                             }
                         }
-                        catch (FaultException<ValidationFault> ex)
-                        {
-                            Console.WriteLine($"[Validation Skip] {ex.Detail.Message}");
-                        }
-                        catch (FaultException<DataFormatFault> ex)
-                        {
-                            Console.WriteLine($"[Format Skip]{ex.Detail.Details}");
-                        }
-                        catch (Exception ex)
-                        {
-                            Console.WriteLine($"[Line Error] Skipping line. Message: {ex.Message}");
-                        }
                     }
-                    Console.WriteLine($"Total samples provessed: {count}");
                 }
                 else
                 {

@@ -77,7 +77,7 @@ namespace Service
                 {
                     Message = $"Invalid frequency ({sample.Frequency}). Must be greater than 0.",
                     Timestamp = DateTime.Now
-                });
+                }, new FaultReason("Validation error: Negative frequency detected."));
             }
 
             if (sample.Voltage < 0)
@@ -87,9 +87,9 @@ namespace Service
 
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
-                    Details = $"Voltage value ({sample.Voltage}) is negative.",
+                    Details = $"Invalid voltage ({sample.Voltage}). Must be greater than 0.",
                     ViolatingField = "Voltage"
-                });
+                }, new FaultReason("Data format error: Negative voltage detected."));
             }
 
             if (sample.Current < 0)
@@ -99,15 +99,15 @@ namespace Service
 
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
-                    Details = $"Current value ({sample.Current}) is negative.",
+                    Details = $"Invalid current ({sample.Current}). Must be greater than 0.",
                     ViolatingField = "Current"
-                });
+                }, new FaultReason("Data format error: Negarive current detected."));
             }
 
-
+            recieverGenerator.GenerateRecieve(sample.Voltage, sample.Current, sample.Frequency);
 
             SimulateDataTransfer();
-            Console.WriteLine($"Sample received: Voltage={sample.Voltage}, Current={sample.Current}");
+            Console.WriteLine($"\nSample received: Voltage={sample.Voltage}, Current={sample.Current}");
 
             CheckCurrentSpike(lastCurrent, sample);
             CheckVoltageSpike(lastVoltage, sample);
