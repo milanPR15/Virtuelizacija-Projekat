@@ -9,10 +9,11 @@ namespace Service.Publisher
     internal class WarningGenerator
     {
         public delegate void WarningEventHandler(object sender, WarningEventArgs e);
+        public delegate void OutOfBandWarningEventHandler(object sender, EventArgs e);
 
         public event WarningEventHandler VoltageSpike;
         public event WarningEventHandler CurrentSpike;
-
+        public event OutOfBandWarningEventHandler OutOfBandWarning;
 
         public void GenerateVoltageSpike(string direction)
         {
@@ -33,6 +34,19 @@ namespace Service.Publisher
             {
                 WarningEventArgs args = new WarningEventArgs(direction);
                 CurrentSpike(this, args);
+            }
+            else
+            {
+                Console.WriteLine("No subscribers!");
+            }
+        }
+
+        public void GenerateOutOfBandWarning()
+        {
+            if (OutOfBandWarning != null)
+            {
+                EventArgs args = new EventArgs();
+                OutOfBandWarning(this, args);
             }
             else
             {

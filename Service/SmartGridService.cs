@@ -14,13 +14,16 @@ namespace Service
 
         private static double lastVoltage = 0;
         private static double lastCurrent = 0;
+        private static double totalCurrent = 0;
+        private static int sampleCount = 0;
 
         private double ITrashold = double.Parse(ConfigurationManager.AppSettings["I_threshold"]);
         private double VTrashold = double.Parse(ConfigurationManager.AppSettings["V_threshold"]);
 
-        private StreamWriter measuremenWriter;
-        private StreamWriter rejectWriter;
+        private double percentageDeviation = double.Parse(ConfigurationManager.AppSettings["percentage_deviation"]);
 
+        private static StreamWriter measuremenWriter;
+        private static StreamWriter rejectWriter;
 
         private readonly string measurementFile = "measurements_session.csv";
         private readonly string rejectFile = "rejects.csv";
@@ -31,16 +34,15 @@ namespace Service
 
         public SmartGridService()
         {
-            bool append = !isFirstTime;
-            measuremenWriter = new StreamWriter(measurementFile, append);
-            rejectWriter = new StreamWriter(rejectFile, append);
-
-            measuremenWriter.AutoFlush = true;
-            rejectWriter.AutoFlush = true;
-
             if (isFirstTime)
             {
                 isFirstTime = false;
+
+                measuremenWriter = new StreamWriter(measurementFile, append: false);
+                rejectWriter = new StreamWriter(rejectFile, append: false);
+
+                measuremenWriter.AutoFlush = true;
+                rejectWriter.AutoFlush = true;
             }
 
             transferGenerator.OnTransferStarted += OnTransferStarted;
@@ -49,9 +51,17 @@ namespace Service
             recieverGenerator.OnSampleReceived += OnRecieve;
             warningGenerator.VoltageSpike += OnVoltageSpike;
             warningGenerator.CurrentSpike += OnCurrentSpike;
+            warningGenerator.OutOfBandWarning += OnOutOfBandWarning;
+        }
+
+        public static void CloseWriters()
+        {
+            measuremenWriter?.Close();
+            rejectWriter?.Close();
         }
 
         private bool disposed = false;
+
         public void StartSession(string meta)
         {
             Console.WriteLine($"Session started with meta: {meta}");
@@ -109,6 +119,11 @@ namespace Service
             SimulateDataTransfer();
             Console.WriteLine($"\nSample received: Voltage={sample.Voltage}, Current={sample.Current}");
 
+            totalCurrent += sample.Current;
+            sampleCount++;
+
+            CheckOutOfBandWarning(sample);
+
             CheckCurrentSpike(lastCurrent, sample);
             CheckVoltageSpike(lastVoltage, sample);
             lastCurrent = sample.Current;
@@ -126,25 +141,13 @@ namespace Service
             GC.SuppressFinalize(this);
         }
 
-
         protected virtual void Dispose(bool disposing)
         {
             if (!disposed)
             {
                 if (disposing)
                 {
-                    if (measuremenWriter != null)
-                    {
-                        measuremenWriter.Close();
-                        measuremenWriter.Dispose();
-                    }
-
-                    if (rejectWriter != null)
-                    {
-                        rejectWriter.Close();
-                        rejectWriter.Dispose();
-                    }
-                    Console.WriteLine("Server resources are being relesed. ");
+                    Console.WriteLine("Server resources are being released.");
                 }
                 disposed = true;
             }
@@ -198,7 +201,6 @@ namespace Service
                 {
                     warningGenerator.GenerateCurrentSpike("Downward");
                 }
-
             }
         }
 
@@ -215,6 +217,23 @@ namespace Service
                     warningGenerator.GenerateVoltageSpike("Downward");
                 }
             }
+        }
+
+        private void CheckOutOfBandWarning(SmartGridSample sample)
+        {
+            if (sample.Current < (1 - percentageDeviation) * totalCurrent / sampleCount)
+            {
+                warningGenerator.GenerateOutOfBandWarning();
+            }
+            else if (sample.Current > (1 + percentageDeviation) * totalCurrent / sampleCount)
+            {
+                warningGenerator.GenerateOutOfBandWarning();
+            }
+        }
+
+        private void OnOutOfBandWarning(object sender, EventArgs e)
+        {
+            Console.WriteLine("Recieved Current is out of bounds.");
         }
     }
 }
