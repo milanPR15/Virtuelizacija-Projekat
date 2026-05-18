@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Service.Publisher
 {
-    internal class RecieveEventArgs
+    internal class RecieveEventArgs : EventArgs
     {
         public double Voltage { get; set; }
         public double Current { get; set; }

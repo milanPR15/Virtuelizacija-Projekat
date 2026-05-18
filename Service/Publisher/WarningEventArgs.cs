@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Service.Publisher
 {
-    internal class WarningEventArgs
+    internal class WarningEventArgs : EventArgs
     {
         public string Direction { get; set; }
         public WarningEventArgs(string direction)

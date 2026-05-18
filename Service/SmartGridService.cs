@@ -20,12 +20,10 @@ namespace Service
 
         private double ITrashold = double.Parse(ConfigurationManager.AppSettings["I_threshold"]);
         private double VTrashold = double.Parse(ConfigurationManager.AppSettings["V_threshold"]);
-
         private double percentageDeviation = double.Parse(ConfigurationManager.AppSettings["percentage_deviation"]);
 
-        //static
-        private  static StreamWriter measuremenWriter;
-        private  static StreamWriter rejectWriter;
+        private static StreamWriter measuremenWriter;
+        private static StreamWriter rejectWriter;
 
         private readonly string measurementFile = "measurements_session.csv";
         private readonly string rejectFile = "rejects.csv";
@@ -34,46 +32,42 @@ namespace Service
         RecieveGenerator recieverGenerator = new RecieveGenerator();
         WarningGenerator warningGenerator = new WarningGenerator();
 
-        
         public SmartGridService()
         {
-        
             if (isFirstTime)
             {
                 isFirstTime = false;
-
                 measuremenWriter = new StreamWriter(measurementFile, append: false);
                 rejectWriter = new StreamWriter(rejectFile, append: false);
-
                 measuremenWriter.AutoFlush = true;
                 rejectWriter.AutoFlush = true;
             }
 
             transferGenerator.OnTransferStarted += OnTransferStarted;
             transferGenerator.OnTransferCompleted += OnTransferCompleted;
-
             recieverGenerator.OnSampleReceived += OnRecieve;
             warningGenerator.VoltageSpike += OnVoltageSpike;
             warningGenerator.CurrentSpike += OnCurrentSpike;
             warningGenerator.OutOfBandWarning += OnOutOfBandWarning;
         }
-        
-        
+
         public static void CloseWriters()
         {
             measuremenWriter?.Close();
             rejectWriter?.Close();
         }
-        
+
         private bool disposed = false;
 
         public void StartSession(string meta)
         {
-            Console.WriteLine($"Session started with meta: {meta}");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Session started: {meta}");
+            Console.WriteLine("========================================");
         }
 
         public void PushSample(SmartGridSample sample)
         {
+            // --- validation ---
             if (sample == null)
             {
                 throw new FaultException<ValidationFault>(new ValidationFault
@@ -87,7 +81,6 @@ namespace Service
             {
                 string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
                 rejectWriter.WriteLine(rejectLine);
-
                 throw new FaultException<ValidationFault>(new ValidationFault
                 {
                     Message = $"Invalid frequency ({sample.Frequency}). Must be greater than 0.",
@@ -99,7 +92,6 @@ namespace Service
             {
                 string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
                 rejectWriter.WriteLine(rejectLine);
-
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Invalid voltage ({sample.Voltage}). Must be greater than 0.",
@@ -111,34 +103,37 @@ namespace Service
             {
                 string rejectLine = $"{DateTime.Now} | Voltage: {sample.Voltage}, Current: {sample.Current}, Frequency: {sample.Frequency} | Reason: Negative value.";
                 rejectWriter.WriteLine(rejectLine);
-
                 throw new FaultException<DataFormatFault>(new DataFormatFault
                 {
                     Details = $"Invalid current ({sample.Current}). Must be greater than 0.",
                     ViolatingField = "Current"
-                }, new FaultReason("Data format error: Negarive current detected."));
+                }, new FaultReason("Data format error: Negative current detected."));
             }
 
             recieverGenerator.GenerateRecieve(sample.Voltage, sample.Current, sample.Frequency);
-
             SimulateDataTransfer();
-            Console.WriteLine($"\nSample received: Voltage={sample.Voltage}, Current={sample.Current}");
+
+            int thisSampleNumber = sampleCount + 1;
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Sample #{thisSampleNumber}: Voltage={sample.Voltage:F2} V, Current={sample.Current:F2} A, Frequency={sample.Frequency} Hz");
 
             totalCurrent += sample.Current;
             sampleCount++;
 
             CheckOutOfBandWarning(sample);
-
             CheckCurrentSpike(lastCurrent, sample);
             CheckVoltageSpike(lastVoltage, sample);
+
             lastCurrent = sample.Current;
             lastVoltage = sample.Voltage;
+
+            Console.WriteLine("----------------------------------------");
         }
 
         public void EndSession()
         {
-            Console.WriteLine("Session ended.");
-            Dispose();  
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Session ended.");
+            Console.WriteLine("========================================");
+            Dispose();
         }
 
         public void Dispose()
@@ -153,7 +148,7 @@ namespace Service
             {
                 if (disposing)
                 {
-                    Console.WriteLine("Server resources are being released.");
+                    Console.WriteLine($"[{DateTime.Now:HH:mm:ss}] Server resources released.");
                 }
                 disposed = true;
             }
@@ -171,12 +166,12 @@ namespace Service
 
         private void OnTransferStarted(object sender, EventArgs e)
         {
-            Console.WriteLine("Processing incoming sample...");
+            Console.Write($"[{DateTime.Now:HH:mm:ss.fff}] Transfer started... ");
         }
 
         private void OnTransferCompleted(object sender, EventArgs e)
         {
-            Console.WriteLine("Sample accepted and stored.");
+            Console.WriteLine("completed.");
         }
 
         private void OnRecieve(object sender, RecieveEventArgs e)
@@ -187,59 +182,66 @@ namespace Service
 
         private void OnVoltageSpike(object sender, WarningEventArgs e)
         {
-            Console.WriteLine($"Voltage Spike: Direction: {e.Direction}");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Voltage spike event dispatched (direction: {e.Direction}).");
         }
 
         private void OnCurrentSpike(object sender, WarningEventArgs e)
         {
-            Console.WriteLine($"Current Spike: Direction: {e.Direction}");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Current spike event dispatched (direction: {e.Direction}).");
         }
 
         private void CheckCurrentSpike(double lastCurrent, SmartGridSample sample)
         {
+            string direction = null;
             if (lastCurrent != 0)
             {
                 if (sample.Current - lastCurrent > ITrashold)
-                {
-                    warningGenerator.GenerateCurrentSpike("Upward");
-                }
+                    direction = "Upward";
                 else if (lastCurrent - sample.Current > ITrashold)
-                {
-                    warningGenerator.GenerateCurrentSpike("Downward");
-                }
+                    direction = "Downward";
+            }
+
+            if (direction != null)
+            {
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Current Spike {direction}: Last={lastCurrent:F2} A, Current={sample.Current:F2} A (Threshold={ITrashold:F2} A)");
+                warningGenerator.GenerateCurrentSpike(direction);
             }
         }
 
         private void CheckVoltageSpike(double lastVoltage, SmartGridSample sample)
         {
+            string direction = null;
             if (lastVoltage != 0)
             {
                 if (sample.Voltage - lastVoltage > VTrashold)
-                {
-                    warningGenerator.GenerateVoltageSpike("Upward");
-                }
+                    direction = "Upward";
                 else if (lastVoltage - sample.Voltage > VTrashold)
-                {
-                    warningGenerator.GenerateVoltageSpike("Downward");
-                }
+                    direction = "Downward";
+            }
+
+            if (direction != null)
+            {
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Voltage Spike {direction}: Last={lastVoltage:F2} V, Current={sample.Voltage:F2} V (Threshold={VTrashold:F2} V)");
+                warningGenerator.GenerateVoltageSpike(direction);
             }
         }
 
         private void CheckOutOfBandWarning(SmartGridSample sample)
         {
-            if (sample.Current < (1 - percentageDeviation) * totalCurrent / sampleCount)
+            double averageCurrent = totalCurrent / sampleCount;
+            double lowerBound = (1 - percentageDeviation) * averageCurrent;
+            double upperBound = (1 + percentageDeviation) * averageCurrent;
+
+            if (sample.Current < lowerBound || sample.Current > upperBound)
             {
-                warningGenerator.GenerateOutOfBandWarning();
-            }
-            else if (sample.Current > (1 + percentageDeviation) * totalCurrent / sampleCount)
-            {
+                Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Out-of-band current: Value={sample.Current:F2} A, Average={averageCurrent:F2} A, Deviation allowed=±{percentageDeviation * 100}%");
                 warningGenerator.GenerateOutOfBandWarning();
             }
         }
 
         private void OnOutOfBandWarning(object sender, EventArgs e)
         {
-            Console.WriteLine("Recieved Current is out of bounds.");
+            Console.WriteLine($"[{DateTime.Now:HH:mm:ss.fff}] Out-of-band warning event triggered.");
         }
     }
 }
