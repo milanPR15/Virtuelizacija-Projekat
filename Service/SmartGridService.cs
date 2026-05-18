@@ -5,6 +5,7 @@ using System.IO;
 using System.Net.NetworkInformation;
 using Service.Publisher;
 using System.Configuration;
+using System.ServiceModel.Configuration;
 
 namespace Service
 {
@@ -22,8 +23,9 @@ namespace Service
 
         private double percentageDeviation = double.Parse(ConfigurationManager.AppSettings["percentage_deviation"]);
 
-        private static StreamWriter measuremenWriter;
-        private static StreamWriter rejectWriter;
+        //static
+        private  static StreamWriter measuremenWriter;
+        private  static StreamWriter rejectWriter;
 
         private readonly string measurementFile = "measurements_session.csv";
         private readonly string rejectFile = "rejects.csv";
@@ -32,8 +34,10 @@ namespace Service
         RecieveGenerator recieverGenerator = new RecieveGenerator();
         WarningGenerator warningGenerator = new WarningGenerator();
 
+        
         public SmartGridService()
         {
+        
             if (isFirstTime)
             {
                 isFirstTime = false;
@@ -53,13 +57,14 @@ namespace Service
             warningGenerator.CurrentSpike += OnCurrentSpike;
             warningGenerator.OutOfBandWarning += OnOutOfBandWarning;
         }
-
+        
+        
         public static void CloseWriters()
         {
             measuremenWriter?.Close();
             rejectWriter?.Close();
         }
-
+        
         private bool disposed = false;
 
         public void StartSession(string meta)
@@ -133,6 +138,7 @@ namespace Service
         public void EndSession()
         {
             Console.WriteLine("Session ended.");
+            Dispose();  
         }
 
         public void Dispose()
